@@ -36,7 +36,9 @@ cc_binary(
 cc_binary(
     name = "hand_tracking_gpu",
     deps = [
-        "//mediapipe/examples/desktop:demo_run_graph_main_gpu",
+        "//mediapipe/examples/desktop:demo_run_graph_main_gpu", 
+        # main program
         "//mediapipe/graphs/hand_tracking:mobile_calculators",
+        # dependent packages
     ],
 )

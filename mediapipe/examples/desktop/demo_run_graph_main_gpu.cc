@@ -15,6 +15,7 @@
 // An example of sending OpenCV webcam frames into a MediaPipe graph.
 // This example requires a linux computer and a GPU with EGL support drivers.
 #include <cstdlib>
+#include <google/protobuf/util/json_util.h>
 
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/formats/image_frame.h"
@@ -30,8 +31,11 @@
 #include "mediapipe/gpu/gpu_buffer.h"
 #include "mediapipe/gpu/gpu_shared_data_internal.h"
 
+#include "mediapipe/framework/formats/landmark.pb.h"
+
 constexpr char kInputStream[] = "input_video";
 constexpr char kOutputStream[] = "output_video";
+constexpr char lOutputStream[] = "output_landmarks";
 constexpr char kWindowName[] = "MediaPipe";
 
 DEFINE_string(
@@ -88,6 +92,8 @@ DEFINE_string(output_video_path, "",
   LOG(INFO) << "Start running the calculator graph.";
   ASSIGN_OR_RETURN(mediapipe::OutputStreamPoller poller,
                    graph.AddOutputStreamPoller(kOutputStream));
+  ASSIGN_OR_RETURN(mediapipe::OutputStreamPoller poller2,
+                   graph.AddOutputStreamPoller(lOutputStream));
   MP_RETURN_IF_ERROR(graph.StartRun({}));
 
   LOG(INFO) << "Start grabbing and processing frames.";
@@ -130,8 +136,19 @@ DEFINE_string(output_video_path, "",
 
     // Get the graph result packet, or stop if that fails.
     mediapipe::Packet packet;
+    mediapipe::Packet packet2;
     if (!poller.Next(&packet)) break;
+    if (!poller2.Next(&packet2)) break;
     std::unique_ptr<mediapipe::ImageFrame> output_frame;
+
+    // display packet2
+    mediapipe::NormalizedLandmarkList landmarkList = packet2.Get<mediapipe::NormalizedLandmarkList>();
+    mediapipe::NormalizedLandmark thumbTip = landmarkList.landmark(4);
+    mediapipe::NormalizedLandmark indexTip = landmarkList.landmark(8);
+    float res = std::pow(thumbTip.x() - indexTip.x(), 2) + std::pow(thumbTip.y() - indexTip.y(), 2); 
+    // printf("distance squared: %f\n", res);
+    printf(thumbTip.x() == 0 ? "not detected " : "detecting ");
+    printf((res < 0.008 && thumbTip.x() != 0) ? "contact\n" : "not contact\n");
 
     // Convert GpuBuffer to ImageFrame.
     MP_RETURN_IF_ERROR(gpu_helper.RunInGlContext(

@@ -29,11 +29,16 @@ namespace mediapipe {
     node {
       calculator: "PassThroughCalculator"
       input_stream: "in"
-      output_stream: "out1"
+      output_stream: "out2"
     }
     node {
       calculator: "PassThroughCalculator"
-      input_stream: "out1"
+      input_stream: "out2"
+      output_stream: "out3"
+    }
+    node {
+      calculator: "PassThroughCalculator"
+      input_stream: "out3"
       output_stream: "out"
     }
   )");
@@ -46,7 +51,7 @@ namespace mediapipe {
   // Give 10 input packets that contains the same std::string "Hello World!".
   for (int i = 0; i < 10; ++i) {
     MP_RETURN_IF_ERROR(graph.AddPacketToInputStream(
-        "in", MakePacket<std::string>("Hello World!").At(Timestamp(i))));
+        "in", MakePacket<std::string>("Hello World 2!").At(Timestamp(i))));
   }
   // Close the input stream "in".
   MP_RETURN_IF_ERROR(graph.CloseInputStream("in"));

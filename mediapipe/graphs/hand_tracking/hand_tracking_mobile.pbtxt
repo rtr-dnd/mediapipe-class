@@ -6,6 +6,7 @@
 # Images coming into and out of the graph.
 input_stream: "input_video"
 output_stream: "output_video"
+output_stream: "output_landmarks"
 
 # Throttles the images flowing downstream for flow control. It passes through
 # the very first incoming image unaltered, and waits for downstream nodes
@@ -122,4 +123,11 @@ node {
   input_stream: "DETECTIONS:palm_detections"
   input_stream: "HANDEDNESS:handedness"
   output_stream: "IMAGE:output_video"
+}
+
+# outputting landmarks
+node {
+  calculator: "PassThroughCalculator"
+  input_stream: "hand_landmarks"
+  output_stream: "output_landmarks"
 }
