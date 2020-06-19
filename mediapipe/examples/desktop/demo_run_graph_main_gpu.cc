@@ -32,10 +32,12 @@
 #include "mediapipe/gpu/gpu_shared_data_internal.h"
 
 #include "mediapipe/framework/formats/landmark.pb.h"
+#include "mediapipe/framework/formats/rect.pb.h"
 
 constexpr char kInputStream[] = "input_video";
 constexpr char kOutputStream[] = "output_video";
 constexpr char lOutputStream[] = "output_landmarks";
+constexpr char rOutputStream[] = "output_hand_rect";
 constexpr char kWindowName[] = "MediaPipe";
 
 DEFINE_string(
@@ -94,6 +96,8 @@ DEFINE_string(output_video_path, "",
                    graph.AddOutputStreamPoller(kOutputStream));
   ASSIGN_OR_RETURN(mediapipe::OutputStreamPoller poller2,
                    graph.AddOutputStreamPoller(lOutputStream));
+  ASSIGN_OR_RETURN(mediapipe::OutputStreamPoller poller3,
+                   graph.AddOutputStreamPoller(rOutputStream));
   MP_RETURN_IF_ERROR(graph.StartRun({}));
 
   LOG(INFO) << "Start grabbing and processing frames.";
@@ -137,18 +141,18 @@ DEFINE_string(output_video_path, "",
     // Get the graph result packet, or stop if that fails.
     mediapipe::Packet packet;
     mediapipe::Packet packet2;
+    mediapipe::Packet packet3;
     if (!poller.Next(&packet)) break;
     if (!poller2.Next(&packet2)) break;
+    if (!poller3.Next(&packet3)) break;
     std::unique_ptr<mediapipe::ImageFrame> output_frame;
 
     // display packet2
     mediapipe::NormalizedLandmarkList landmarkList = packet2.Get<mediapipe::NormalizedLandmarkList>();
     mediapipe::NormalizedLandmark thumbTip = landmarkList.landmark(4);
     mediapipe::NormalizedLandmark indexTip = landmarkList.landmark(8);
-    float res = std::pow(thumbTip.x() - indexTip.x(), 2) + std::pow(thumbTip.y() - indexTip.y(), 2); 
-    // printf("distance squared: %f\n", res);
-    printf(thumbTip.x() == 0 ? "not detected " : "detecting ");
-    printf((res < 0.008 && thumbTip.x() != 0) ? "contact\n" : "not contact\n");
+
+    mediapipe::NormalizedRect handRect = packet3.Get<mediapipe::NormalizedRect>();
 
     // Convert GpuBuffer to ImageFrame.
     MP_RETURN_IF_ERROR(gpu_helper.RunInGlContext(
@@ -172,7 +176,30 @@ DEFINE_string(output_video_path, "",
     // Convert back to opencv for display or saving.
     cv::Mat output_frame_mat = mediapipe::formats::MatView(output_frame.get());
     cv::cvtColor(output_frame_mat, output_frame_mat, cv::COLOR_RGB2BGR);
-    if (save_video) {
+
+    // display circle
+    float rectCenterX = handRect.x_center() * output_frame_mat.cols;
+    float rectCenterY = handRect.y_center() * output_frame_mat.rows;
+    float pinchCenterNormX = (thumbTip.x() + indexTip.x())/2;
+    float pinchCenterNormY = (thumbTip.y() + indexTip.y())/2;
+    float pinchCenterX = (pinchCenterNormX) * output_frame_mat.cols;
+    float pinchCenterY = (pinchCenterNormY) * output_frame_mat.rows;
+    
+    if(pinchCenterX != 0) {
+      cv::Point center;
+      center.x = pinchCenterX;
+      center.y = pinchCenterY;
+      float res = std::pow(thumbTip.x() - indexTip.x(), 2) + std::pow(thumbTip.y() - indexTip.y(), 2); 
+      cv::Scalar color;
+      if (res <= 0.008) {
+        color = {0, 0, 255};
+      } else {
+        color = {255, 255, 0};
+      }
+      int radius = 3;
+      cv::circle(output_frame_mat, center, radius, color, 3, 8, 0);
+    }
+        if (save_video) {
       if (!writer.isOpened()) {
         LOG(INFO) << "Prepare video writer.";
         writer.open(FLAGS_output_video_path,

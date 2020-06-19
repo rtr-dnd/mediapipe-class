@@ -7,6 +7,7 @@
 input_stream: "input_video"
 output_stream: "output_video"
 output_stream: "output_landmarks"
+output_stream: "output_hand_rect"
 
 # Throttles the images flowing downstream for flow control. It passes through
 # the very first incoming image unaltered, and waits for downstream nodes
@@ -130,4 +131,11 @@ node {
   calculator: "PassThroughCalculator"
   input_stream: "hand_landmarks"
   output_stream: "output_landmarks"
+}
+
+#outputting normrect
+node {
+  calculator: "PassThroughCalculator"
+  input_stream: "hand_rect_from_landmarks"
+  output_stream: "output_hand_rect"
 }
