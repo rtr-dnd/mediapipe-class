@@ -60,8 +60,7 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
             int fX = x - location.x;
             if (fX >= overlay->cols)
                 break;
-            // double opacity = ((double)overlay->data[fY * overlay->step + fX * overlay->channels() + 3])/255;
-            double opacity = 1.0;
+            double opacity = ((double)overlay->data[fY * overlay->step + fX * overlay->channels() + 3])/255;
             for (int c = 0; opacity > 0 && c < src->channels(); ++c) {
                 unsigned char overlayPx = overlay->data[fY * overlay->step + fX * overlay->channels() + c];
                 unsigned char srcPx = src->data[y * src->step + x * src->channels() + c];
@@ -264,12 +263,27 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
           cv::resize(input_frame_mat, input_frame_mat, cv::Size(), lensScale, lensScale);
           cv::Rect ROI(cv::Point(lensScale*center.x - ROISize/2, lensScale*center.y - ROISize/2), cv::Size(ROISize, ROISize));
           cv::Mat cropped = input_frame_mat(ROI);
+
+          cv::Mat mask(cropped.size().width, cropped.size().height, CV_8UC1);//circle
+          cv::rectangle(mask, cv::Point(0, 0), cv::Point(cropped.size().width, cropped.size().height), cv::Scalar(0), -1);
+          cv::circle(mask, cv::Point(cropped.size().width/2, cropped.size().height/2), cropped.size().width/2, cv::Scalar(255), -1, 8, 0);
+          cv::Mat masked(cropped.size().width, cropped.size().height, CV_8UC4);//dist
+          cv::Mat srcArray[] = {cropped, mask};
+          int from_to[] = {0,0, 1,1, 2,2, 3,3};
+          std::cout<<cropped.type(); printf(" ");
+          std::cout<<mask.type(); printf(" ");
+          std::cout<<masked.type(); printf(" ");
+          std::cout<<cropped.size().width; printf(" ");
+          std::cout<<mask.size().width; printf(" ");
+          std::cout<<masked.size().width; printf(" ");
+          cv::mixChannels(srcArray, 2, &masked, 1, from_to, 4);
+
           cv::Point centerOffset;
           centerOffset.x = center.x - int(ROISize);
           centerOffset.y = center.y - int(ROISize/2);
-          overlayImage(&output_frame_mat, &cropped, centerOffset);
+          overlayImage(&output_frame_mat, &masked, centerOffset);
           // color = {255, 0, 255};
-          // cv::circle(output_frame_mat, center, radius, color, 3, 8, 0);
+          cv::circle(output_frame_mat, center, radius, color, 3, 8, 0);
         }
       } else {
         isActive = false;
