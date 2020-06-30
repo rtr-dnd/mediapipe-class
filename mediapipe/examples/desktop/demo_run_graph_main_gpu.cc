@@ -190,7 +190,22 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
     const std::vector<float> littleTipV = {
       landmarkList.landmark(20).x() - landmarkList.landmark(19).x(),
       landmarkList.landmark(20).y() - landmarkList.landmark(19).y()};
-    
+
+    const std::vector<float> thumbDirV = {
+      landmarkList.landmark(4).x() - landmarkList.landmark(3).x(),
+      landmarkList.landmark(4).y() - landmarkList.landmark(3).y()};
+    const std::vector<float> indexDirV = {
+      landmarkList.landmark(8).x() - landmarkList.landmark(7).x(),
+      landmarkList.landmark(8).y() - landmarkList.landmark(7).y()};
+    const std::vector<float> betweenDirV = {
+      (thumbDirV[0]*9 + indexDirV[0])/10,
+      (thumbDirV[1]*9 + indexDirV[1])/10};
+    const float betweenDirNorm = std::sqrt(std::pow(betweenDirV[0], 2) + std::pow(betweenDirV[1], 2));
+    const std::vector<float> normalizedBetweenDirV = {
+      float(betweenDirV[0]/betweenDirNorm),
+      float(betweenDirV[1]/betweenDirNorm)};
+    printf("%f, %f, %f\n", normalizedBetweenDirV[0], normalizedBetweenDirV[1], std::pow(normalizedBetweenDirV[0], 2) + std::pow(normalizedBetweenDirV[1], 2));
+
 
     mediapipe::NormalizedRect handRect = packet3.Get<mediapipe::NormalizedRect>();
 
@@ -252,7 +267,7 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
         recentDistance[0] = distanceBetween;
         distanceAverage += distanceBetween;
         distanceAverage /= aveNum;
-        printf("%f\n", distanceBetween);
+        // printf("%f\n", distanceBetween);
         if (distanceBetween <= 0.01) {
           // trigger pinch image
           isActive = true;
@@ -276,11 +291,11 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
           cv::mixChannels(srcArray, 2, &masked, 1, from_to, 4);
 
           cv::Point centerOffset;
-          centerOffset.x = center.x - int(ROISize);
-          centerOffset.y = center.y - int(ROISize/2);
+          centerOffset.x = center.x - int(ROISize/2) + normalizedBetweenDirV[0]*int(ROISize/1.5);
+          centerOffset.y = center.y - int(ROISize/2) + normalizedBetweenDirV[1]*int(ROISize/1.5);
           overlayImage(&input_frame_mat_copy, &masked, centerOffset);
-          centerOffset.x = center.x - int(ROISize/2);
-          centerOffset.y = center.y;
+          centerOffset.x = center.x + normalizedBetweenDirV[0]*int(ROISize/1.5);
+          centerOffset.y = center.y + normalizedBetweenDirV[1]*int(ROISize/1.5);
           cv::circle(input_frame_mat_copy, centerOffset, cropped.size().width/2, cv::Scalar(255, 255, 255, 0.5), distanceAverage/0.8*3, cv::LINE_AA, 0);
           cv::circle(input_frame_mat_copy, cv::Point(15, 22), 5, cv::Scalar(222, 137, 18), -1, cv::LINE_AA, 0);
           cv::putText(input_frame_mat_copy, "Pinching", cv::Point(30, 30), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(200,200,200), 1, cv::LINE_AA);
