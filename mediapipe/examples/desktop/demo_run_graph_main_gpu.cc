@@ -123,7 +123,7 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
   LOG(INFO) << "Start grabbing and processing frames.";
   bool grab_frames = true;
   bool isActive = false;
-  const int aveNum = 10;
+  const int aveNum = 5;
   float recentDistance[aveNum] = {};
   // count failure and stop showing window when reached threshold
   int failCount = 0;
@@ -218,6 +218,9 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
     cv::cvtColor(output_frame_mat, output_frame_mat, cv::COLOR_RGB2BGR);
     cv::cvtColor(input_frame_mat, input_frame_mat, cv::COLOR_RGB2BGR);
 
+    // disabling annotation by deepcopying input frame. replace with output_frame_mat to re-enable
+    cv::Mat input_frame_mat_copy = input_frame_mat.clone();
+
     // display circle
     float rectCenterX = handRect.x_center() * output_frame_mat.cols;
     float rectCenterY = handRect.y_center() * output_frame_mat.rows;
@@ -270,24 +273,23 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
           cv::Mat masked(cropped.size().width, cropped.size().height, CV_8UC4);//dist
           cv::Mat srcArray[] = {cropped, mask};
           int from_to[] = {0,0, 1,1, 2,2, 3,3};
-          std::cout<<cropped.type(); printf(" ");
-          std::cout<<mask.type(); printf(" ");
-          std::cout<<masked.type(); printf(" ");
-          std::cout<<cropped.size().width; printf(" ");
-          std::cout<<mask.size().width; printf(" ");
-          std::cout<<masked.size().width; printf(" ");
           cv::mixChannels(srcArray, 2, &masked, 1, from_to, 4);
 
           cv::Point centerOffset;
           centerOffset.x = center.x - int(ROISize);
           centerOffset.y = center.y - int(ROISize/2);
-          overlayImage(&output_frame_mat, &masked, centerOffset);
-          // color = {255, 0, 255};
-          cv::circle(output_frame_mat, center, radius, color, 3, 8, 0);
+          overlayImage(&input_frame_mat_copy, &masked, centerOffset);
+          centerOffset.x = center.x - int(ROISize/2);
+          centerOffset.y = center.y;
+          cv::circle(input_frame_mat_copy, centerOffset, cropped.size().width/2, cv::Scalar(255, 255, 255, 0.5), distanceAverage/0.8*3, cv::LINE_AA, 0);
+          cv::circle(input_frame_mat_copy, cv::Point(15, 22), 5, cv::Scalar(222, 137, 18), -1, cv::LINE_AA, 0);
+          cv::putText(input_frame_mat_copy, "Pinching", cv::Point(30, 30), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(200,200,200), 1, cv::LINE_AA);
         }
       } else {
         isActive = false;
         failCount += 1;
+        cv::circle(input_frame_mat_copy, cv::Point(15, 22), 5, cv::Scalar(78, 184, 17), -1, cv::LINE_AA, 0);
+        cv::putText(input_frame_mat_copy, "Hand detected", cv::Point(30, 30), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(200,200,200), 1, cv::LINE_AA);
       }
     } else {
       isActive = false;
@@ -298,12 +300,12 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
         LOG(INFO) << "Prepare video writer.";
         writer.open(FLAGS_output_video_path,
                     mediapipe::fourcc('a', 'v', 'c', '1'),  // .mp4
-                    capture.get(cv::CAP_PROP_FPS), output_frame_mat.size());
+                    capture.get(cv::CAP_PROP_FPS), input_frame_mat_copy.size());
         RET_CHECK(writer.isOpened());
       }
-      writer.write(output_frame_mat);
+      writer.write(input_frame_mat_copy);
     } else {
-      cv::imshow(kWindowName, output_frame_mat);
+      cv::imshow(kWindowName, input_frame_mat_copy);
       // Press any key to exit.
       const int pressed_key = cv::waitKey(5);
       if (pressed_key >= 0 && pressed_key != 255) grab_frames = false;

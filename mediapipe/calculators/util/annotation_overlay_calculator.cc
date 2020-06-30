@@ -413,7 +413,10 @@ REGISTER_CALCULATOR(AnnotationOverlayCalculator);
   }
 
   // Send out blended image as GPU packet.
+
+  // modified by reigo: disabled annotation
   auto output_frame = output_texture.GetFrame<mediapipe::GpuBuffer>();
+  // auto output_frame = input_frame;
   cc->Outputs()
       .Tag(kOutputFrameTagGpu)
       .Add(output_frame.release(), cc->InputTimestamp());
