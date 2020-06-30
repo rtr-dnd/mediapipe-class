@@ -51,6 +51,26 @@ DEFINE_string(output_video_path, "",
               "Full path of where to save result (.mp4 only). "
               "If not provided, show result in a window.");
 
+void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
+    for (int y = std::max(location.y, 0); y < src->rows; ++y) {
+        int fY = y - location.y;
+        if (fY >= overlay->rows)
+            break;
+        for (int x = std::max(location.x, 0); x < src->cols; ++x) {
+            int fX = x - location.x;
+            if (fX >= overlay->cols)
+                break;
+            // double opacity = ((double)overlay->data[fY * overlay->step + fX * overlay->channels() + 3])/255;
+            double opacity = 1.0;
+            for (int c = 0; opacity > 0 && c < src->channels(); ++c) {
+                unsigned char overlayPx = overlay->data[fY * overlay->step + fX * overlay->channels() + c];
+                unsigned char srcPx = src->data[y * src->step + x * src->channels() + c];
+                src->data[y * src->step + src->channels() * x + c] = srcPx * (1. - opacity) + overlayPx * opacity;
+            }
+        }
+    }
+}
+
 ::mediapipe::Status RunMPPGraph() {
   std::string calculator_graph_config_contents;
   MP_RETURN_IF_ERROR(mediapipe::file::GetContents(
@@ -103,6 +123,9 @@ DEFINE_string(output_video_path, "",
 
   LOG(INFO) << "Start grabbing and processing frames.";
   bool grab_frames = true;
+  bool isActive = false;
+  const int aveNum = 5;
+  float recentDistance[aveNum] = {};
   while (grab_frames) {
     // Capture opencv camera or video frame.
     cv::Mat camera_frame_raw;
@@ -192,6 +215,7 @@ DEFINE_string(output_video_path, "",
     // Convert back to opencv for display or saving.
     cv::Mat output_frame_mat = mediapipe::formats::MatView(output_frame.get());
     cv::cvtColor(output_frame_mat, output_frame_mat, cv::COLOR_RGB2BGR);
+    cv::cvtColor(input_frame_mat, input_frame_mat, cv::COLOR_RGB2BGR);
 
     // display circle
     float rectCenterX = handRect.x_center() * output_frame_mat.cols;
@@ -206,24 +230,50 @@ DEFINE_string(output_video_path, "",
       std::inner_product(indexBottomV.begin(), indexBottomV.end(), littleTipV.begin(), 0.0f) < 0;
     
     if(pinchCenterX != 0) {
+      int radius = 3;
       cv::Point center;
-      center.x = pinchCenterX;
-      center.y = pinchCenterY;
-      float res = std::pow(thumbTip.x() - indexTip.x(), 2) + std::pow(thumbTip.y() - indexTip.y(), 2); 
       cv::Scalar color;
       if (isPinching) {
-        if (res <= 0.008) {
-          color = {255, 0, 255};
-        } else {
-          color = {0, 0, 255};
+        center.x = pinchCenterX;
+        center.y = pinchCenterY;
+        // normalized with handrect.width()
+        float distanceBetween = (std::pow(thumbTip.x() - indexTip.x(), 2) + std::pow(thumbTip.y() - indexTip.y(), 2)) / handRect.width() / handRect.width();
+        float distanceAverage = 0;
+        for (int i = 1; i<aveNum; i++) {
+          float temp = recentDistance[aveNum - i - 1];
+          recentDistance[aveNum - i] = temp;
+          distanceAverage += temp;
+        }
+        recentDistance[0] = distanceBetween;
+        distanceAverage += distanceBetween;
+        distanceAverage /= aveNum;
+        printf("%f\n", distanceBetween);
+        if (distanceBetween <= 0.01) {
+          // trigger pinch image
+          isActive = true;
+        }
+        if (isActive) {
+          // draw pinch window
+          int ROISize = int(distanceAverage * 1000);
+          // distanceAverage: 0 ~ 0.8 (approx)
+          float lensScale = distanceAverage/0.8*4 + 1;
+          cv::Rect ROI(cv::Point(center.x - ROISize/2, center.y - ROISize/2), cv::Size(ROISize, ROISize));
+          cv::Mat cropped = input_frame_mat(ROI);
+          cv::resize(cropped, cropped, cv::Size(), lensScale, lensScale);
+          cv::Point centerOffset;
+          centerOffset.x = center.x - int(ROISize*lensScale/2);
+          centerOffset.y = center.y - int(ROISize*lensScale/2);
+          overlayImage(&output_frame_mat, &cropped, centerOffset);
+          // color = {255, 0, 255};
+          // cv::circle(output_frame_mat, center, radius, color, 3, 8, 0);
         }
       } else {
-        color = {255, 255, 0};
+        isActive = false;
       }
-      int radius = 3;
-      cv::circle(output_frame_mat, center, radius, color, 3, 8, 0);
+    } else {
+      isActive = false;
     }
-        if (save_video) {
+    if (save_video) {
       if (!writer.isOpened()) {
         LOG(INFO) << "Prepare video writer.";
         writer.open(FLAGS_output_video_path,
