@@ -124,8 +124,10 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
   LOG(INFO) << "Start grabbing and processing frames.";
   bool grab_frames = true;
   bool isActive = false;
-  const int aveNum = 5;
+  const int aveNum = 10;
   float recentDistance[aveNum] = {};
+  // count failure and stop showing window when reached threshold
+  int failCount = 0;
   while (grab_frames) {
     // Capture opencv camera or video frame.
     cv::Mat camera_frame_raw;
@@ -220,8 +222,9 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
     // display circle
     float rectCenterX = handRect.x_center() * output_frame_mat.cols;
     float rectCenterY = handRect.y_center() * output_frame_mat.rows;
-    float pinchCenterNormX = (thumbTip.x() + indexTip.x())/2;
-    float pinchCenterNormY = (thumbTip.y() + indexTip.y())/2;
+    // weighted center of thumb and index
+    float pinchCenterNormX = (thumbTip.x()*1 + indexTip.x())/2;
+    float pinchCenterNormY = (thumbTip.y()*1 + indexTip.y())/2;
     float pinchCenterX = (pinchCenterNormX) * output_frame_mat.cols;
     float pinchCenterY = (pinchCenterNormY) * output_frame_mat.rows;
     bool isPinching = 
@@ -251,27 +254,30 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
         if (distanceBetween <= 0.01) {
           // trigger pinch image
           isActive = true;
+          failCount = 0;
         }
-        if (isActive) {
+        if (failCount <= 2) {
           // draw pinch window
-          int ROISize = int(distanceAverage * 1000);
+          int ROISize = std::min(int(distanceAverage * 1000), 300);
           // distanceAverage: 0 ~ 0.8 (approx)
-          float lensScale = distanceAverage/0.8*4 + 1;
-          cv::Rect ROI(cv::Point(center.x - ROISize/2, center.y - ROISize/2), cv::Size(ROISize, ROISize));
+          float lensScale = distanceAverage/0.8*10 + 1;
+          cv::resize(input_frame_mat, input_frame_mat, cv::Size(), lensScale, lensScale);
+          cv::Rect ROI(cv::Point(lensScale*center.x - ROISize/2, lensScale*center.y - ROISize/2), cv::Size(ROISize, ROISize));
           cv::Mat cropped = input_frame_mat(ROI);
-          cv::resize(cropped, cropped, cv::Size(), lensScale, lensScale);
           cv::Point centerOffset;
-          centerOffset.x = center.x - int(ROISize*lensScale/2);
-          centerOffset.y = center.y - int(ROISize*lensScale/2);
+          centerOffset.x = center.x - int(ROISize);
+          centerOffset.y = center.y - int(ROISize/2);
           overlayImage(&output_frame_mat, &cropped, centerOffset);
           // color = {255, 0, 255};
           // cv::circle(output_frame_mat, center, radius, color, 3, 8, 0);
         }
       } else {
         isActive = false;
+        failCount += 1;
       }
     } else {
       isActive = false;
+      failCount += 1;
     }
     if (save_video) {
       if (!writer.isOpened()) {
