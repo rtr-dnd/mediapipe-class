@@ -16,6 +16,7 @@
 // This example requires a linux computer and a GPU with EGL support drivers.
 #include <cstdlib>
 #include <google/protobuf/util/json_util.h>
+#include <vector>
 
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/formats/image_frame.h"
@@ -152,6 +153,21 @@ DEFINE_string(output_video_path, "",
     mediapipe::NormalizedLandmark thumbTip = landmarkList.landmark(4);
     mediapipe::NormalizedLandmark indexTip = landmarkList.landmark(8);
 
+    // generating vectors for hand posture detection
+    const std::vector<float> indexBottomV = {
+      landmarkList.landmark(6).x() - landmarkList.landmark(5).x(),
+      landmarkList.landmark(6).y() - landmarkList.landmark(5).y()};
+    const std::vector<float> middleTipV = {
+      landmarkList.landmark(12).x() - landmarkList.landmark(11).x(),
+      landmarkList.landmark(12).y() - landmarkList.landmark(11).y()};
+    const std::vector<float> ringTipV = {
+      landmarkList.landmark(16).x() - landmarkList.landmark(15).x(),
+      landmarkList.landmark(16).y() - landmarkList.landmark(15).y()};
+    const std::vector<float> littleTipV = {
+      landmarkList.landmark(20).x() - landmarkList.landmark(19).x(),
+      landmarkList.landmark(20).y() - landmarkList.landmark(19).y()};
+    
+
     mediapipe::NormalizedRect handRect = packet3.Get<mediapipe::NormalizedRect>();
 
     // Convert GpuBuffer to ImageFrame.
@@ -184,6 +200,10 @@ DEFINE_string(output_video_path, "",
     float pinchCenterNormY = (thumbTip.y() + indexTip.y())/2;
     float pinchCenterX = (pinchCenterNormX) * output_frame_mat.cols;
     float pinchCenterY = (pinchCenterNormY) * output_frame_mat.rows;
+    bool isPinching = 
+      std::inner_product(indexBottomV.begin(), indexBottomV.end(), middleTipV.begin(), 0.0f) < 0 &&
+      std::inner_product(indexBottomV.begin(), indexBottomV.end(), ringTipV.begin(), 0.0f) < 0 &&
+      std::inner_product(indexBottomV.begin(), indexBottomV.end(), littleTipV.begin(), 0.0f) < 0;
     
     if(pinchCenterX != 0) {
       cv::Point center;
@@ -191,8 +211,12 @@ DEFINE_string(output_video_path, "",
       center.y = pinchCenterY;
       float res = std::pow(thumbTip.x() - indexTip.x(), 2) + std::pow(thumbTip.y() - indexTip.y(), 2); 
       cv::Scalar color;
-      if (res <= 0.008) {
-        color = {0, 0, 255};
+      if (isPinching) {
+        if (res <= 0.008) {
+          color = {255, 0, 255};
+        } else {
+          color = {0, 0, 255};
+        }
       } else {
         color = {255, 255, 0};
       }
