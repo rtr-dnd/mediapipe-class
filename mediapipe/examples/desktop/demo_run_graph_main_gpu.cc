@@ -291,7 +291,7 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
         }
         if (failCount <= 2) {
           // draw pinch window
-          int ROISize = std::min(int(distanceAverage * 1000), 300);
+          int ROISize = std::min(int(distanceAverage * 1000), 400);
           // distanceAverage: 0 ~ 0.8 (approx)
           float lensScale = distanceAverage/0.8*10 + 1;
           cv::resize(input_frame_mat, input_frame_mat, cv::Size(), lensScale, lensScale);
