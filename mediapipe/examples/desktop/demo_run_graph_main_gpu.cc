@@ -96,7 +96,8 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
   if (load_video) {
     capture.open(FLAGS_input_video_path);
   } else {
-    capture.open(0);
+    // capture.open(0); // Integrated Camera
+    capture.open(1); // webcam
   }
   RET_CHECK(capture.isOpened());
 
@@ -136,7 +137,8 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
     if (camera_frame_raw.empty()) break;  // End of video.
     cv::Mat camera_frame;
     cv::cvtColor(camera_frame_raw, camera_frame, cv::COLOR_BGR2RGB);
-    if (!load_video) {
+    // if (!load_video) {
+    if(false) { 
       cv::flip(camera_frame, camera_frame, /*flipcode=HORIZONTAL*/ 1);
     }
 
