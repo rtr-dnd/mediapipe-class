@@ -71,6 +71,8 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
 }
 
 ::mediapipe::Status RunMPPGraph() {
+  const bool pass_through = false;
+
   std::string calculator_graph_config_contents;
   MP_RETURN_IF_ERROR(mediapipe::file::GetContents(
       FLAGS_calculator_graph_config_file, &calculator_graph_config_contents));
@@ -97,7 +99,7 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
     capture.open(FLAGS_input_video_path);
   } else {
     // capture.open(0); // Integrated Camera
-    capture.open(1); // webcam
+    capture.open(0); // webcam
   }
   RET_CHECK(capture.isOpened());
 
@@ -138,7 +140,7 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
     cv::Mat camera_frame;
     cv::cvtColor(camera_frame_raw, camera_frame, cv::COLOR_BGR2RGB);
     // if (!load_video) {
-    if(false) { 
+    if(!pass_through) { 
       cv::flip(camera_frame, camera_frame, /*flipcode=HORIZONTAL*/ 1);
     }
 
@@ -201,9 +203,14 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
     const std::vector<float> indexDirV = {
       landmarkList.landmark(8).x() - landmarkList.landmark(7).x(),
       landmarkList.landmark(8).y() - landmarkList.landmark(7).y()};
-    const std::vector<float> betweenDirV = {
-      (thumbDirV[0]*9 + indexDirV[0])/10,
-      (thumbDirV[1]*9 + indexDirV[1])/10};
+    std::vector<float> betweenDirV = {0, 0};
+    if(pass_through) {
+      betweenDirV[0] = (thumbDirV[0] + indexDirV[0])/2; 
+      betweenDirV[1] = (thumbDirV[1] + indexDirV[1])/2; 
+    } else {
+      betweenDirV[0] = (thumbDirV[0]*9 + indexDirV[0])/10; 
+      betweenDirV[1] = (thumbDirV[1]*9 + indexDirV[1])/10; 
+    }
     const float betweenDirNorm = std::sqrt(std::pow(betweenDirV[0], 2) + std::pow(betweenDirV[1], 2));
     const std::vector<float> normalizedBetweenDirV = {
       float(betweenDirV[0]/betweenDirNorm),
