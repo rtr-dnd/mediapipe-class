@@ -4,6 +4,16 @@ title: Home
 nav_order: 1
 ---
 
+# PinchLens
+Only Linux supported because of Mediapipe GPU being supported Linux only.
+All modifications are inside projects/pinchlens directory: no file outside it is modified.
+
+Go to `mediapipe` folder and
+- build: bazel build -c opt --copt -DMESA_EGL_NO_X11_HEADERS --copt -DEGL_NO_X11 mediapipe/projects/pinchlens:pinchlens_gpu
+- run: GLOG_logtostderr=1 bazel-bin/mediapipe/projects/pinchlens/pinchlens_gpu  --calculator_graph_config_file=mediapipe/projects/pinchlens/graphs:hand_tracking_mobile.pbtxt
+
+--------------------------------------------------------------------------------
+
 ![MediaPipe](docs/images/mediapipe_small.png)
 
 --------------------------------------------------------------------------------
