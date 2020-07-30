@@ -128,14 +128,14 @@ node {
 
 # outputting landmarks
 node {
-  calculator: "PassThroughCalculator"
+  calculator: "MyPassThroughCalculator"
   input_stream: "hand_landmarks"
   output_stream: "output_landmarks"
 }
 
 #outputting normrect
 node {
-  calculator: "PassThroughCalculator"
+  calculator: "MyPassThroughCalculator"
   input_stream: "hand_rect_from_landmarks"
   output_stream: "output_hand_rect"
 }
