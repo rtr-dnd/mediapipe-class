@@ -33,10 +33,11 @@
 
 #include "mediapipe/framework/formats/rect.pb.h"
 #include "mediapipe/framework/formats/classification.pb.h"
+#include "mediapipe/framework/formats/landmark.pb.h"
 
 constexpr char kInputStream[] = "input_video";
 // constexpr char kOutputStream[] = "output_video";
-// constexpr char lOutputStream[] = "multi_hand_landmarks";
+constexpr char lOutputStream[] = "multi_hand_landmarks";
 constexpr char hOutputStream[] = "multi_hand_rects";
 constexpr char handednessOutputStream[] = "multi_hand_handedness";
 // constexpr char pOutputStream[] = "multi_palm_rects_pass";
@@ -104,6 +105,8 @@ DEFINE_string(output_video_path, "",
                    graph.AddOutputStreamPoller(handednessOutputStream));
   ASSIGN_OR_RETURN(mediapipe::OutputStreamPoller poller3,
                    graph.AddOutputStreamPoller(hOutputStream));
+  ASSIGN_OR_RETURN(mediapipe::OutputStreamPoller poller4,
+                    graph.AddOutputStreamPoller(lOutputStream));
                   /*
   ASSIGN_OR_RETURN(mediapipe::OutputStreamPoller poller4,
                    graph.AddOutputStreamPoller(pOutputStream));
@@ -156,12 +159,12 @@ DEFINE_string(output_video_path, "",
     // mediapipe::Packet packet;
     mediapipe::Packet packet2;
     mediapipe::Packet packet3;
-    // mediapipe::Packet packet4;
+    mediapipe::Packet packet4;
     // mediapipe::Packet packet5;
     // if (!poller.Next(&packet)) break;
     if (!poller2.Next(&packet2)) break;
     if (!poller3.Next(&packet3)) break;
-    // if (!poller4.Next(&packet4)) break;
+    if (!poller4.Next(&packet4)) break;
     // if (!poller5.Next(&packet5)) break;
     std::unique_ptr<mediapipe::ImageFrame> output_frame;
 
@@ -181,6 +184,8 @@ DEFINE_string(output_video_path, "",
       }
       handedness = packet2.Get<std::vector<mediapipe::ClassificationList>>();
       std::cout << handedness[0].classification(0).label() << "\n";
+      std::vector<mediapipe::NormalizedLandmarkList> landmarkList = packet4.Get<std::vector<mediapipe::NormalizedLandmarkList>>();
+      std::cout << landmarkList[0].landmark(4).x() << "\n";
     } 
 
 

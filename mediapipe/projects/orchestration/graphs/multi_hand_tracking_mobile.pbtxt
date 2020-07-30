@@ -5,7 +5,7 @@
 # Images coming into and out of the graph.
 input_stream: "input_video"
 # output_stream: "output_video"
-# output_stream: "multi_hand_landmarks"
+output_stream: "multi_hand_landmarks"
 output_stream: "multi_hand_rects"
 output_stream: "multi_hand_handedness"
 # output_stream: "multi_palm_rects_pass"

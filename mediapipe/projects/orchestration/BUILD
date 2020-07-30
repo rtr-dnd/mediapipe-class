@@ -45,6 +45,7 @@ cc_library(
         "//mediapipe/gpu:gpu_buffer",
         "//mediapipe/gpu:gpu_shared_data_internal",
         "//mediapipe/framework/formats:rect_cc_proto",
+        "//mediapipe/framework/formats:landmark_cc_proto",
         "//mediapipe/framework/formats:classification_cc_proto",
     ],
 )
