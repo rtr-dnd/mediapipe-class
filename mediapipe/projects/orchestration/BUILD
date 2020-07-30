@@ -23,7 +23,7 @@ cc_binary(
     name = "orchestration_gpu",
     deps = [
         "//mediapipe/projects/orchestration:orchestration_gpu_main",
-        "//mediapipe/graphs/hand_tracking:multi_hand_mobile_calculators",
+        "//mediapipe/projects/orchestration/graphs:multi_hand_mobile_calculators",
     ],
 )
 
@@ -44,5 +44,7 @@ cc_library(
         "//mediapipe/gpu:gl_calculator_helper",
         "//mediapipe/gpu:gpu_buffer",
         "//mediapipe/gpu:gpu_shared_data_internal",
+        "//mediapipe/framework/formats:rect_cc_proto",
+        "//mediapipe/framework/formats:classification_cc_proto",
     ],
 )

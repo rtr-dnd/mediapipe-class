@@ -15,6 +15,7 @@
 // An example of sending OpenCV webcam frames into a MediaPipe graph.
 // This example requires a linux computer and a GPU with EGL support drivers.
 #include <cstdlib>
+#include <vector>
 
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/formats/image_frame.h"
@@ -30,8 +31,17 @@
 #include "mediapipe/gpu/gpu_buffer.h"
 #include "mediapipe/gpu/gpu_shared_data_internal.h"
 
+#include "mediapipe/framework/formats/rect.pb.h"
+#include "mediapipe/framework/formats/classification.pb.h"
+
 constexpr char kInputStream[] = "input_video";
-constexpr char kOutputStream[] = "output_video";
+// constexpr char kOutputStream[] = "output_video";
+// constexpr char lOutputStream[] = "multi_hand_landmarks";
+constexpr char hOutputStream[] = "multi_hand_rects";
+constexpr char handednessOutputStream[] = "multi_hand_handedness";
+// constexpr char pOutputStream[] = "multi_palm_rects_pass";
+// palm_rects shouldn't be used: https://github.com/google/mediapipe/issues/734
+// constexpr char dOutputStream[] = "multi_palm_detections";
 constexpr char kWindowName[] = "MediaPipe";
 
 DEFINE_string(
@@ -86,8 +96,22 @@ DEFINE_string(output_video_path, "",
   }
 
   LOG(INFO) << "Start running the calculator graph.";
+  /*
   ASSIGN_OR_RETURN(mediapipe::OutputStreamPoller poller,
                    graph.AddOutputStreamPoller(kOutputStream));
+                   */
+  ASSIGN_OR_RETURN(mediapipe::OutputStreamPoller poller2,
+                   graph.AddOutputStreamPoller(handednessOutputStream));
+  ASSIGN_OR_RETURN(mediapipe::OutputStreamPoller poller3,
+                   graph.AddOutputStreamPoller(hOutputStream));
+                  /*
+  ASSIGN_OR_RETURN(mediapipe::OutputStreamPoller poller4,
+                   graph.AddOutputStreamPoller(pOutputStream));
+                   */
+                   /*
+  ASSIGN_OR_RETURN(mediapipe::OutputStreamPoller poller5,
+                   graph.AddOutputStreamPoller(dOutputStream));
+                   */
   MP_RETURN_IF_ERROR(graph.StartRun({}));
 
   LOG(INFO) << "Start grabbing and processing frames.";
@@ -129,11 +153,39 @@ DEFINE_string(output_video_path, "",
         }));
 
     // Get the graph result packet, or stop if that fails.
-    mediapipe::Packet packet;
-    if (!poller.Next(&packet)) break;
+    // mediapipe::Packet packet;
+    mediapipe::Packet packet2;
+    mediapipe::Packet packet3;
+    // mediapipe::Packet packet4;
+    // mediapipe::Packet packet5;
+    // if (!poller.Next(&packet)) break;
+    if (!poller2.Next(&packet2)) break;
+    if (!poller3.Next(&packet3)) break;
+    // if (!poller4.Next(&packet4)) break;
+    // if (!poller5.Next(&packet5)) break;
     std::unique_ptr<mediapipe::ImageFrame> output_frame;
 
+    std::vector<mediapipe::NormalizedRect> handRects = packet3.Get<std::vector<mediapipe::NormalizedRect>>();
+    float rectCenterX = handRects[0].x_center();
+    float rectCenterX2 = 0;
+    std::vector<mediapipe::ClassificationList> handedness;
+    if (rectCenterX >= 0.1) {
+      switch(handRects.size()) {
+          case 1:
+              std::cout << handRects.size() << " " << rectCenterX << "\n";
+              break;
+          case 2:
+              rectCenterX2 = handRects[1].x_center();
+              std::cout << handRects.size() << " " << rectCenterX << " " << rectCenterX2 << "\n";
+              break;
+      }
+      handedness = packet2.Get<std::vector<mediapipe::ClassificationList>>();
+      std::cout << handedness[0].classification(0).label() << "\n";
+    } 
+
+
     // Convert GpuBuffer to ImageFrame.
+    /*
     MP_RETURN_IF_ERROR(gpu_helper.RunInGlContext(
         [&packet, &output_frame, &gpu_helper]() -> ::mediapipe::Status {
           auto& gpu_frame = packet.Get<mediapipe::GpuBuffer>();
@@ -151,9 +203,11 @@ DEFINE_string(output_video_path, "",
           texture.Release();
           return ::mediapipe::OkStatus();
         }));
+        */
 
     // Convert back to opencv for display or saving.
-    cv::Mat output_frame_mat = mediapipe::formats::MatView(output_frame.get());
+    // cv::Mat output_frame_mat = mediapipe::formats::MatView(output_frame.get());
+    cv::Mat output_frame_mat = input_frame_mat.clone();
     cv::cvtColor(output_frame_mat, output_frame_mat, cv::COLOR_RGB2BGR);
     if (save_video) {
       if (!writer.isOpened()) {
