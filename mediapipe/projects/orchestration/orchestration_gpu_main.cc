@@ -168,24 +168,89 @@ DEFINE_string(output_video_path, "",
     // if (!poller5.Next(&packet5)) break;
     std::unique_ptr<mediapipe::ImageFrame> output_frame;
 
+    // ------------ PROCESS AREA! ------------
     std::vector<mediapipe::NormalizedRect> handRects = packet3.Get<std::vector<mediapipe::NormalizedRect>>();
     float rectCenterX = handRects[0].x_center();
     float rectCenterX2 = 0;
+    int leftIndex = -1; // index of left hand (-1 if not detected) : -1 ~ 1
+    int rightIndex = -1; // index of right hand (-1 if not detected) : -1 ~ 1
+    float indexCosScore = 0; // openness of index finger: around -0.3~0.3
+    float openness = 0; // openness of index finger: exactly -1 ~ 1
+    static float prevIndexPseudoVelocity = 0;
+    const int historyNum = 10;
+    static std::vector<float> velocityHistory(historyNum, 0.0);
+    static int peakCount = 0;
+
     std::vector<mediapipe::ClassificationList> handedness;
+    std::vector<mediapipe::NormalizedLandmarkList> landmarkList;
     if (rectCenterX >= 0.1) {
+      handedness = packet2.Get<std::vector<mediapipe::ClassificationList>>();
+      landmarkList = packet4.Get<std::vector<mediapipe::NormalizedLandmarkList>>();
       switch(handRects.size()) {
           case 1:
-              std::cout << handRects.size() << " " << rectCenterX << "\n";
+              // std::cout << handRects.size() << " " << rectCenterX << "\n";
+              if (handedness[0].classification(0).label() == "left ") {
+                leftIndex = 0;
+              } else {
+                rightIndex = 0;
+              }
               break;
           case 2:
               rectCenterX2 = handRects[1].x_center();
-              std::cout << handRects.size() << " " << rectCenterX << " " << rectCenterX2 << "\n";
+              // std::cout << handRects.size() << " " << rectCenterX << " " << rectCenterX2 << "\n";
+              if (handedness[0].classification(0).label() == "left") {
+                leftIndex = 0;
+                rightIndex = 1;
+              } else {
+                leftIndex = 1;
+                rightIndex = 0;
+              }
               break;
       }
-      handedness = packet2.Get<std::vector<mediapipe::ClassificationList>>();
-      std::cout << handedness[0].classification(0).label() << "\n";
-      std::vector<mediapipe::NormalizedLandmarkList> landmarkList = packet4.Get<std::vector<mediapipe::NormalizedLandmarkList>>();
-      std::cout << landmarkList[0].landmark(4).x() << "\n";
+      if (rightIndex >= 0) {
+        std::vector<float> indexPalmV = {
+          landmarkList[rightIndex].landmark(5).x() - landmarkList[rightIndex].landmark(0).x(),
+          landmarkList[rightIndex].landmark(5).y() - landmarkList[rightIndex].landmark(0).y()
+        };
+        std::vector<float> indexMiddleV = {
+          landmarkList[rightIndex].landmark(7).x() - landmarkList[rightIndex].landmark(6).x(),
+          landmarkList[rightIndex].landmark(7).y() - landmarkList[rightIndex].landmark(6).y()
+        };
+        indexCosScore = 
+          (indexPalmV[0]*indexMiddleV[0] + indexPalmV[1]*indexMiddleV[1])
+          / sqrt(std::pow(indexPalmV[0], 2) + std::pow(indexPalmV[1], 2))
+          / sqrt(std::pow(indexPalmV[0], 2) + std::pow(indexPalmV[1], 2));
+        openness = std::min(std::abs(indexCosScore*0.5/0.3 + 0.5), 1.0);
+
+        if (prevIndexPseudoVelocity != 0) {
+          for( int i = 1; i < historyNum; i++ ) {
+            velocityHistory[historyNum - i] = velocityHistory[historyNum - i - 1];
+          }
+          velocityHistory[0] = sqrt(
+            std::pow(landmarkList[rightIndex].landmark(8).y(), 2) + 
+            std::pow(landmarkList[rightIndex].landmark(8).x(), 2)) / prevIndexPseudoVelocity;
+          if ( peakCount <= 0 && 
+            *max_element(velocityHistory.begin(), velocityHistory.end()) > 1.1 &&
+            *min_element(velocityHistory.begin(), velocityHistory.end()) < 0.93
+          ) {
+            std::cout << "peak: ";
+            if((landmarkList[rightIndex].landmark(8).x() - landmarkList[rightIndex].landmark(7).x()) < 0) {
+              std::cout << "left ";
+            } else { std::cout << "right "; }
+            if(landmarkList[rightIndex].landmark(8).y()*input_frame_mat.cols < input_frame_mat.rows/2) {
+              std::cout << "upper ";
+            } else { std::cout << "under "; }
+            peakCount = 8;
+          } else {
+            if (peakCount >= 0) {peakCount--;}
+          }
+          std::cout << velocityHistory[0] << "\n";
+        }
+        prevIndexPseudoVelocity = sqrt(std::pow(landmarkList[rightIndex].landmark(8).y(), 2)
+         + std::pow(landmarkList[rightIndex].landmark(8).x(), 2));
+      } else {
+        prevIndexPseudoVelocity = 0;
+      }
     } 
 
 
@@ -210,10 +275,17 @@ DEFINE_string(output_video_path, "",
         }));
         */
 
+    // ----------- RENDER AREA! -----------
     // Convert back to opencv for display or saving.
     // cv::Mat output_frame_mat = mediapipe::formats::MatView(output_frame.get());
     cv::Mat output_frame_mat = input_frame_mat.clone();
-    cv::cvtColor(output_frame_mat, output_frame_mat, cv::COLOR_RGB2BGR);
+    cv::cvtColor(output_frame_mat, output_frame_mat, cv::COLOR_RGB2BGR); // RGB from here on
+    cv::Point centerPoint;
+    centerPoint.x = output_frame_mat.cols/2; centerPoint.y = output_frame_mat.rows/2;
+    cv::circle(output_frame_mat, centerPoint, 50, (0, 0, 255), 3);
+    // cv::circle(output_frame_mat, centerPoint, 50*std::abs(indexCosScore*180.0/3.14159265358979*1.5+90)/180, (255, 0, 0), -1);
+    cv::circle(output_frame_mat, centerPoint, 50*openness, (255, 0, 0), -1);
+
     if (save_video) {
       if (!writer.isOpened()) {
         LOG(INFO) << "Prepare video writer.";
