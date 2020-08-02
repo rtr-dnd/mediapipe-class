@@ -35,6 +35,11 @@
 #include "mediapipe/framework/formats/classification.pb.h"
 #include "mediapipe/framework/formats/landmark.pb.h"
 
+#include <ao/ao.h>
+#include <mpg123.h>
+
+#define BITS 8
+
 constexpr char kInputStream[] = "input_video";
 // constexpr char kOutputStream[] = "output_video";
 constexpr char lOutputStream[] = "multi_hand_landmarks";
@@ -116,6 +121,32 @@ DEFINE_string(output_video_path, "",
                    graph.AddOutputStreamPoller(dOutputStream));
                    */
   MP_RETURN_IF_ERROR(graph.StartRun({}));
+
+  mpg123_handle *mh;
+  unsigned char *buffer;
+  size_t buffer_size;
+  size_t done;
+  int err;
+
+  int driver;
+  ao_device *dev;
+
+  ao_sample_format format;
+  int channels, encoding;
+  long rate;
+
+  ao_initialize();
+  driver = ao_default_driver_id();
+  mpg123_init();
+  mh = mpg123_new(NULL, &err);
+  buffer_size = mpg123_outblock(mh);
+  mpg123_open(mh, "/home/mech-user/Music/house.mp3");
+  mpg123_getformat(mh, &rate, &channels, &encoding);
+  format.bits = mpg123_encsize(encoding) * BITS;
+  format.rate = rate;
+  format.channels = channels;
+  format.byte_format = AO_FMT_NATIVE;
+  format.matrix = 0;
 
   LOG(INFO) << "Start grabbing and processing frames.";
   bool grab_frames = true;
@@ -236,6 +267,12 @@ DEFINE_string(output_video_path, "",
             std::cout << "peak: ";
             if((landmarkList[rightIndex].landmark(8).x() - landmarkList[rightIndex].landmark(7).x()) < 0) {
               std::cout << "left ";
+              dev = ao_open_live(driver, &format, NULL);
+
+              /* decode and play */
+              while (mpg123_read(mh, buffer, buffer_size, &done) == MPG123_OK)
+                  ao_play(dev, (char*)buffer, done);
+
             } else { std::cout << "right "; }
             if(landmarkList[rightIndex].landmark(8).y()*input_frame_mat.cols < input_frame_mat.rows/2) {
               std::cout << "upper ";
