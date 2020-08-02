@@ -28,9 +28,16 @@ cc_binary(
 )
 
 cc_library(
+    name = "orchestration_x11",
+    hdrs = ["orchestration_x11.h"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
     name = "orchestration_gpu_main",
     srcs = ["orchestration_gpu_main.cc"],
     deps = [
+        ":orchestration_x11",
         "//mediapipe/framework:calculator_framework",
         "//mediapipe/framework/formats:image_frame",
         "//mediapipe/framework/formats:image_frame_opencv",

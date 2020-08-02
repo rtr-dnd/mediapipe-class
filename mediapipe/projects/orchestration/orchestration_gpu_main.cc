@@ -17,6 +17,7 @@
 #include <cstdlib>
 #include <vector>
 
+#include "mediapipe/projects/orchestration/orchestration_x11.h"
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/formats/image_frame.h"
 #include "mediapipe/framework/formats/image_frame_opencv.h"
@@ -116,6 +117,10 @@ DEFINE_string(output_video_path, "",
                    graph.AddOutputStreamPoller(dOutputStream));
                    */
   MP_RETURN_IF_ERROR(graph.StartRun({}));
+  
+  Display *display;
+  unsigned int keycode;
+  display = XOpenDisplay(NULL);
 
   LOG(INFO) << "Start grabbing and processing frames.";
   bool grab_frames = true;
