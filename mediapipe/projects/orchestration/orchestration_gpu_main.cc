@@ -35,11 +35,6 @@
 #include "mediapipe/framework/formats/classification.pb.h"
 #include "mediapipe/framework/formats/landmark.pb.h"
 
-#include <ao/ao.h>
-#include <mpg123.h>
-
-#define BITS 8
-
 constexpr char kInputStream[] = "input_video";
 // constexpr char kOutputStream[] = "output_video";
 constexpr char lOutputStream[] = "multi_hand_landmarks";
@@ -122,32 +117,6 @@ DEFINE_string(output_video_path, "",
                    */
   MP_RETURN_IF_ERROR(graph.StartRun({}));
 
-  mpg123_handle *mh;
-  unsigned char *buffer;
-  size_t buffer_size;
-  size_t done;
-  int err;
-
-  int driver;
-  ao_device *dev;
-
-  ao_sample_format format;
-  int channels, encoding;
-  long rate;
-
-  ao_initialize();
-  driver = ao_default_driver_id();
-  mpg123_init();
-  mh = mpg123_new(NULL, &err);
-  buffer_size = mpg123_outblock(mh);
-  mpg123_open(mh, "/home/mech-user/Music/house.mp3");
-  mpg123_getformat(mh, &rate, &channels, &encoding);
-  format.bits = mpg123_encsize(encoding) * BITS;
-  format.rate = rate;
-  format.channels = channels;
-  format.byte_format = AO_FMT_NATIVE;
-  format.matrix = 0;
-
   LOG(INFO) << "Start grabbing and processing frames.";
   bool grab_frames = true;
   while (grab_frames) {
@@ -211,6 +180,7 @@ DEFINE_string(output_video_path, "",
     const int historyNum = 10;
     static std::vector<float> velocityHistory(historyNum, 0.0);
     static int peakCount = 0;
+    static bool wasOpen = false; // open/close gesture trigger
 
     std::vector<mediapipe::ClassificationList> handedness;
     std::vector<mediapipe::NormalizedLandmarkList> landmarkList;
@@ -239,54 +209,91 @@ DEFINE_string(output_video_path, "",
               break;
       }
       if (rightIndex >= 0) {
-        std::vector<float> indexPalmV = {
-          landmarkList[rightIndex].landmark(5).x() - landmarkList[rightIndex].landmark(0).x(),
-          landmarkList[rightIndex].landmark(5).y() - landmarkList[rightIndex].landmark(0).y()
+        std::vector<float> indexTipV = {
+          landmarkList[rightIndex].landmark(8).x() - landmarkList[rightIndex].landmark(7).x(),
+          landmarkList[rightIndex].landmark(8).y() - landmarkList[rightIndex].landmark(7).y()
         };
-        std::vector<float> indexMiddleV = {
-          landmarkList[rightIndex].landmark(7).x() - landmarkList[rightIndex].landmark(6).x(),
-          landmarkList[rightIndex].landmark(7).y() - landmarkList[rightIndex].landmark(6).y()
+        std::vector<float> middleTipV = {
+          landmarkList[rightIndex].landmark(12).x() - landmarkList[rightIndex].landmark(11).x(),
+          landmarkList[rightIndex].landmark(12).y() - landmarkList[rightIndex].landmark(11).y()
         };
-        indexCosScore = 
-          (indexPalmV[0]*indexMiddleV[0] + indexPalmV[1]*indexMiddleV[1])
-          / sqrt(std::pow(indexPalmV[0], 2) + std::pow(indexPalmV[1], 2))
-          / sqrt(std::pow(indexPalmV[0], 2) + std::pow(indexPalmV[1], 2));
-        openness = std::min(std::abs(indexCosScore*0.5/0.3 + 0.5), 1.0);
-
-        if (prevIndexPseudoVelocity != 0) {
-          for( int i = 1; i < historyNum; i++ ) {
-            velocityHistory[historyNum - i] = velocityHistory[historyNum - i - 1];
+        std::vector<float> ringTipV = {
+          landmarkList[rightIndex].landmark(16).x() - landmarkList[rightIndex].landmark(15).x(),
+          landmarkList[rightIndex].landmark(16).y() - landmarkList[rightIndex].landmark(15).y()
+        };
+        if ((
+          indexTipV[0]*middleTipV[0] + indexTipV[1]*middleTipV[1] > 0 &&
+          indexTipV[0]*ringTipV[0] + indexTipV[1]*ringTipV[1] > 0
+        )) { // open close
+          std::vector<float> indexPalmV = {
+            landmarkList[rightIndex].landmark(5).x() - landmarkList[rightIndex].landmark(0).x(),
+            landmarkList[rightIndex].landmark(5).y() - landmarkList[rightIndex].landmark(0).y()
+          };
+          std::vector<float> indexMiddleV = {
+            landmarkList[rightIndex].landmark(7).x() - landmarkList[rightIndex].landmark(6).x(),
+            landmarkList[rightIndex].landmark(7).y() - landmarkList[rightIndex].landmark(6).y()
+          };
+          indexCosScore = 
+            (indexPalmV[0]*indexMiddleV[0] + indexPalmV[1]*indexMiddleV[1])
+            / sqrt(std::pow(indexPalmV[0], 2) + std::pow(indexPalmV[1], 2))
+            / sqrt(std::pow(indexPalmV[0], 2) + std::pow(indexPalmV[1], 2));
+          openness = std::min(std::abs(indexCosScore*0.5/0.3 + 0.5), 1.0);
+          std::cout << "open close \n";
+          wasOpen = true;
+          if(openness < 0.3) {
+            std::cout << "killing all \n";
+            std::system("killall play");
           }
-          velocityHistory[0] = sqrt(
-            std::pow(landmarkList[rightIndex].landmark(8).y(), 2) + 
-            std::pow(landmarkList[rightIndex].landmark(8).x(), 2)) / prevIndexPseudoVelocity;
-          if ( peakCount <= 0 && 
-            *max_element(velocityHistory.begin(), velocityHistory.end()) > 1.1 &&
-            *min_element(velocityHistory.begin(), velocityHistory.end()) < 0.93
-          ) {
-            std::cout << "peak: ";
-            if((landmarkList[rightIndex].landmark(8).x() - landmarkList[rightIndex].landmark(7).x()) < 0) {
-              std::cout << "left ";
-              dev = ao_open_live(driver, &format, NULL);
-
-              /* decode and play */
-              while (mpg123_read(mh, buffer, buffer_size, &done) == MPG123_OK)
-                  ao_play(dev, (char*)buffer, done);
-
-            } else { std::cout << "right "; }
-            if(landmarkList[rightIndex].landmark(8).y()*input_frame_mat.cols < input_frame_mat.rows/2) {
-              std::cout << "upper ";
-            } else { std::cout << "under "; }
-            peakCount = 8;
-          } else {
-            if (peakCount >= 0) {peakCount--;}
+        } else { //airtap
+          std::cout << "airtap \n";
+          if (prevIndexPseudoVelocity != 0) {
+            for( int i = 1; i < historyNum; i++ ) {
+              velocityHistory[historyNum - i] = velocityHistory[historyNum - i - 1];
+            }
+            velocityHistory[0] = sqrt(
+              std::pow(landmarkList[rightIndex].landmark(8).y(), 2) + 
+              std::pow(landmarkList[rightIndex].landmark(8).x(), 2)) / prevIndexPseudoVelocity;
+            if ( peakCount <= 0 && 
+              // gesture detected &&
+              *max_element(velocityHistory.begin(), velocityHistory.end()) > 1.1 &&
+              *min_element(velocityHistory.begin(), velocityHistory.end()) < 0.93
+            ) {
+              std::cout << "peak: ";
+              if((landmarkList[rightIndex].landmark(8).x() - landmarkList[rightIndex].landmark(7).x()) < 0) {
+                if(landmarkList[rightIndex].landmark(8).y()*input_frame_mat.cols < input_frame_mat.rows/2) {
+                  std::cout << "upper left \n";
+                  std::system("play -q ~/Music/1.mp3 &"); // upper left
+                } else {
+                  std::cout << "under left \n";
+                  std::system("play -q ~/Music/2.mp3 &"); // under left
+                }
+              } else { 
+                std::cout << "right "; 
+                if(landmarkList[rightIndex].landmark(8).y()*input_frame_mat.cols < input_frame_mat.rows/2) {
+                  std::cout << "upper right \n";
+                  std::system("play -q ~/Music/3.mp3 &"); // upper right
+                } else {
+                  std::cout << "under right \n";
+                  std::system("play -q ~/Music/4.mp3 &"); // under right
+                }
+              }
+              peakCount = 10;
+            } else {
+              if (peakCount >= 0) {peakCount--;}
+            }
+            std::cout << velocityHistory[0] << "\n";
           }
-          std::cout << velocityHistory[0] << "\n";
+          prevIndexPseudoVelocity = sqrt(std::pow(landmarkList[rightIndex].landmark(8).y(), 2)
+          + std::pow(landmarkList[rightIndex].landmark(8).x(), 2));
         }
-        prevIndexPseudoVelocity = sqrt(std::pow(landmarkList[rightIndex].landmark(8).y(), 2)
-         + std::pow(landmarkList[rightIndex].landmark(8).x(), 2));
       } else {
         prevIndexPseudoVelocity = 0;
+      }
+      if (leftIndex >= 0) {
+        // detect gesture
+        // if (/*gesturedetected*/) {
+          // turn up the volume
+        // }
       }
     } 
 
@@ -319,9 +326,9 @@ DEFINE_string(output_video_path, "",
     cv::cvtColor(output_frame_mat, output_frame_mat, cv::COLOR_RGB2BGR); // RGB from here on
     cv::Point centerPoint;
     centerPoint.x = output_frame_mat.cols/2; centerPoint.y = output_frame_mat.rows/2;
-    cv::circle(output_frame_mat, centerPoint, 50, (0, 0, 255), 3);
+    // cv::circle(output_frame_mat, centerPoint, 50, (0, 0, 255), 3);
     // cv::circle(output_frame_mat, centerPoint, 50*std::abs(indexCosScore*180.0/3.14159265358979*1.5+90)/180, (255, 0, 0), -1);
-    cv::circle(output_frame_mat, centerPoint, 50*openness, (255, 0, 0), -1);
+    // cv::circle(output_frame_mat, centerPoint, 50*openness + 1, (255, 0, 0), -1);
 
     if (save_video) {
       if (!writer.isOpened()) {
