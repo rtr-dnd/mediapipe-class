@@ -95,7 +95,15 @@ DEFINE_string(output_video_path, "",
     capture.set(cv::CAP_PROP_FPS, 30);
 #endif
   }
+  /*
+  cv::namedWindow("Tuba");
+  cv::namedWindow("Trombone");
+  cv::namedWindow("Horn");
+  cv::moveWindow(kWindowName, 550, 50);
+  cv::moveWindow("Trombone", 1300, 50);
+  cv::moveWindow("Horn", 800, 700);
 
+*/
   LOG(INFO) << "Start running the calculator graph.";
   /*
   ASSIGN_OR_RETURN(mediapipe::OutputStreamPoller poller,
@@ -180,17 +188,23 @@ DEFINE_string(output_video_path, "",
     const int historyNum = 10;
     static std::vector<float> velocityHistory(historyNum, 0.0);
     static int peakCount = 0;
-    static bool wasOpen = false; // open/close gesture trigger
+    static int volCount = 0;
 
     std::vector<mediapipe::ClassificationList> handedness;
     std::vector<mediapipe::NormalizedLandmarkList> landmarkList;
+    handedness = packet2.Get<std::vector<mediapipe::ClassificationList>>();
+    landmarkList = packet4.Get<std::vector<mediapipe::NormalizedLandmarkList>>();
     if (rectCenterX >= 0.1) {
-      handedness = packet2.Get<std::vector<mediapipe::ClassificationList>>();
-      landmarkList = packet4.Get<std::vector<mediapipe::NormalizedLandmarkList>>();
+      std::cout << "in rect \n";
+      if (handedness[0].classification_size() > 5 || handedness[0].classification_size() == 0 || landmarkList[0].landmark_size() > 30 || landmarkList[0].landmark_size() < 20) {
+        printf("||||||||||||||||||||||||||||||||||||||||\n");
+        continue;
+      }
+      std::cout << "before switch \n";
       switch(handRects.size()) {
           case 1:
               // std::cout << handRects.size() << " " << rectCenterX << "\n";
-              if (handedness[0].classification(0).label() == "left ") {
+              if (handedness[0].classification(0).label() == "Left") {
                 leftIndex = 0;
               } else {
                 rightIndex = 0;
@@ -199,7 +213,7 @@ DEFINE_string(output_video_path, "",
           case 2:
               rectCenterX2 = handRects[1].x_center();
               // std::cout << handRects.size() << " " << rectCenterX << " " << rectCenterX2 << "\n";
-              if (handedness[0].classification(0).label() == "left") {
+              if (handedness[0].classification(0).label() == "Left") {
                 leftIndex = 0;
                 rightIndex = 1;
               } else {
@@ -208,7 +222,9 @@ DEFINE_string(output_video_path, "",
               }
               break;
       }
-      if (rightIndex >= 0) {
+      std::cout << "before right \n";
+      if (rightIndex >= 0 && landmarkList[rightIndex].landmark_size() < 30 && landmarkList[rightIndex].landmark_size() > 20) {
+        std::cout << "in right \n";
         std::vector<float> indexTipV = {
           landmarkList[rightIndex].landmark(8).x() - landmarkList[rightIndex].landmark(7).x(),
           landmarkList[rightIndex].landmark(8).y() - landmarkList[rightIndex].landmark(7).y()
@@ -221,10 +237,10 @@ DEFINE_string(output_video_path, "",
           landmarkList[rightIndex].landmark(16).x() - landmarkList[rightIndex].landmark(15).x(),
           landmarkList[rightIndex].landmark(16).y() - landmarkList[rightIndex].landmark(15).y()
         };
-        if ((
+        if (
           indexTipV[0]*middleTipV[0] + indexTipV[1]*middleTipV[1] > 0 &&
           indexTipV[0]*ringTipV[0] + indexTipV[1]*ringTipV[1] > 0
-        )) { // open close
+        ) { // open close
           std::vector<float> indexPalmV = {
             landmarkList[rightIndex].landmark(5).x() - landmarkList[rightIndex].landmark(0).x(),
             landmarkList[rightIndex].landmark(5).y() - landmarkList[rightIndex].landmark(0).y()
@@ -233,14 +249,14 @@ DEFINE_string(output_video_path, "",
             landmarkList[rightIndex].landmark(7).x() - landmarkList[rightIndex].landmark(6).x(),
             landmarkList[rightIndex].landmark(7).y() - landmarkList[rightIndex].landmark(6).y()
           };
+          std::cout << "before cos \n";
           indexCosScore = 
             (indexPalmV[0]*indexMiddleV[0] + indexPalmV[1]*indexMiddleV[1])
             / sqrt(std::pow(indexPalmV[0], 2) + std::pow(indexPalmV[1], 2))
             / sqrt(std::pow(indexPalmV[0], 2) + std::pow(indexPalmV[1], 2));
           openness = std::min(std::abs(indexCosScore*0.5/0.3 + 0.5), 1.0);
           std::cout << "open close \n";
-          wasOpen = true;
-          if(openness < 0.3) {
+          if(openness < 0.1) {
             std::cout << "killing all \n";
             std::system("killall play");
           }
@@ -260,21 +276,22 @@ DEFINE_string(output_video_path, "",
             ) {
               std::cout << "peak: ";
               if((landmarkList[rightIndex].landmark(8).x() - landmarkList[rightIndex].landmark(7).x()) < 0) {
-                if(landmarkList[rightIndex].landmark(8).y()*input_frame_mat.cols < input_frame_mat.rows/2) {
-                  std::cout << "upper left \n";
-                  std::system("play -q ~/Music/1.mp3 &"); // upper left
+                if(landmarkList[rightIndex].landmark(8).y()*input_frame_mat.cols < input_frame_mat.rows/3) {
+                  std::cout << "-------------------------upper left \n";
+                  
+                  std::system("play -q ~/Music/tuba.wav &"); // upper left
                 } else {
-                  std::cout << "under left \n";
-                  std::system("play -q ~/Music/2.mp3 &"); // under left
+                  std::cout << "-------------------------under left \n";
+                  // std::system("play -q ~/Music/trumpet.wav &"); // under left
                 }
               } else { 
                 std::cout << "right "; 
-                if(landmarkList[rightIndex].landmark(8).y()*input_frame_mat.cols < input_frame_mat.rows/2) {
-                  std::cout << "upper right \n";
-                  std::system("play -q ~/Music/3.mp3 &"); // upper right
+                if(landmarkList[rightIndex].landmark(8).y()*input_frame_mat.cols < input_frame_mat.rows/3) {
+                  std::cout << "-------------------------upper right \n";
+                  std::system("play -q ~/Music/trombone.wav &"); // upper right
                 } else {
-                  std::cout << "under right \n";
-                  std::system("play -q ~/Music/4.mp3 &"); // under right
+                  std::cout << "-------------------------under right \n";
+                  std::system("play -q ~/Music/horn.wav &"); // under right
                 }
               }
               peakCount = 10;
@@ -290,11 +307,33 @@ DEFINE_string(output_video_path, "",
         prevIndexPseudoVelocity = 0;
       }
       if (leftIndex >= 0) {
-        // detect gesture
-        // if (/*gesturedetected*/) {
-          // turn up the volume
-        // }
+        std::cout << "in left ";
+        std::cout << leftIndex << " ";
+        std::cout << landmarkList[leftIndex].landmark_size() << " \n";
+        if(landmarkList[leftIndex].landmark_size() > 30 || landmarkList[leftIndex].landmark_size() < 20) { 
+          printf("---------------------------------------\n");
+          continue; 
+        } else {
+          // detect gesture
+          if (landmarkList[leftIndex].landmark(8).x()*input_frame_mat.rows - 
+              landmarkList[leftIndex].landmark(20).x()*input_frame_mat.rows
+              < -50 && volCount <= 0) {
+            // turn up the volume
+            std::cout << "up volume \n";
+            std::system("amixer -q -D pulse sset Master 5%+");
+            volCount = 5;
+          } else if (landmarkList[leftIndex].landmark(8).x()*input_frame_mat.rows - 
+            landmarkList[leftIndex].landmark(20).x()*input_frame_mat.rows
+            > 50 && volCount <= 0) {
+            std::cout << "down volume \n";
+            std::system("amixer -q -D pulse sset Master 5%-");
+            volCount = 10;
+          }
+        }
+        volCount--;
       }
+
+      std::cout << "after left \n";
     } 
 
 
@@ -351,6 +390,7 @@ DEFINE_string(output_video_path, "",
   LOG(INFO) << "Shutting down.";
   if (writer.isOpened()) writer.release();
   MP_RETURN_IF_ERROR(graph.CloseInputStream(kInputStream));
+  std::system("killall play");
   return graph.WaitUntilDone();
 }
 
