@@ -132,17 +132,19 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
   LOG(INFO) << "Start grabbing and processing frames.";
   bool grab_frames = true;
 
+  // whether the hand is detected
+  bool isDetected = false;
   // 今ピンチ中か否か
   bool isActive = false;
 
   // 直近aveNum個の距離と中点の値を保存しておき、平均を取って描画する
-  const int aveNum = 5;
-  float recentDistance[aveNum] = {};
-  float recentBetweenVX[aveNum] = {};
-  float recentBetweenVY[aveNum] = {};
+  // const int aveNum = 5;
+  // float recentDistance[aveNum] = {};
+  // float recentBetweenVX[aveNum] = {};
+  // float recentBetweenVY[aveNum] = {};
 
   // ピンチを検出できないと増える。これが一定以下なら、さっきまでピンチしていたということなので、次のフレームで指の距離が離れていても、ピンチアウト途中だと判定
-  int failCount = 0;
+  // int failCount = 0;
 
   while (grab_frames) {
     // Capture opencv camera or video frame.
@@ -196,39 +198,39 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
     mediapipe::NormalizedLandmark thumbTip = landmarkList.landmark(4);
     mediapipe::NormalizedLandmark indexTip = landmarkList.landmark(8);
 
-    // generating vectors for hand posture detection
-    const std::vector<float> indexBottomV = { // 人差し指付け根のベクトル
-      landmarkList.landmark(6).x() - landmarkList.landmark(5).x(),
-      landmarkList.landmark(6).y() - landmarkList.landmark(5).y()};
-    const std::vector<float> middleTipV = { // 中指先端のベクトル、以下同様
-      landmarkList.landmark(12).x() - landmarkList.landmark(11).x(),
-      landmarkList.landmark(12).y() - landmarkList.landmark(11).y()};
-    const std::vector<float> ringTipV = {
-      landmarkList.landmark(16).x() - landmarkList.landmark(15).x(),
-      landmarkList.landmark(16).y() - landmarkList.landmark(15).y()};
-    const std::vector<float> littleTipV = {
-      landmarkList.landmark(20).x() - landmarkList.landmark(19).x(),
-      landmarkList.landmark(20).y() - landmarkList.landmark(19).y()};
+    // // generating vectors for hand posture detection
+    // const std::vector<float> indexBottomV = { // 人差し指付け根のベクトル
+    //   landmarkList.landmark(6).x() - landmarkList.landmark(5).x(),
+    //   landmarkList.landmark(6).y() - landmarkList.landmark(5).y()};
+    // const std::vector<float> middleTipV = { // 中指先端のベクトル、以下同様
+    //   landmarkList.landmark(12).x() - landmarkList.landmark(11).x(),
+    //   landmarkList.landmark(12).y() - landmarkList.landmark(11).y()};
+    // const std::vector<float> ringTipV = {
+    //   landmarkList.landmark(16).x() - landmarkList.landmark(15).x(),
+    //   landmarkList.landmark(16).y() - landmarkList.landmark(15).y()};
+    // const std::vector<float> littleTipV = {
+    //   landmarkList.landmark(20).x() - landmarkList.landmark(19).x(),
+    //   landmarkList.landmark(20).y() - landmarkList.landmark(19).y()};
 
-    const std::vector<float> thumbDirV = { // 人差し指全体のベクトル
-      landmarkList.landmark(4).x() - landmarkList.landmark(3).x(),
-      landmarkList.landmark(4).y() - landmarkList.landmark(3).y()};
-    const std::vector<float> indexDirV = {
-      landmarkList.landmark(8).x() - landmarkList.landmark(7).x(),
-      landmarkList.landmark(8).y() - landmarkList.landmark(7).y()};
-    std::vector<float> betweenDirV = {0, 0}; // 親指と人差し指の中点の向きのベクトル
-    if(pass_through) { // パススルーなら中点そのまま
-      betweenDirV[0] = (thumbDirV[0] + indexDirV[0])/2; 
-      betweenDirV[1] = (thumbDirV[1] + indexDirV[1])/2; 
-    } else { // ミラーなら重み付き平均
-      betweenDirV[0] = (thumbDirV[0]*9 + indexDirV[0])/10; 
-      betweenDirV[1] = (thumbDirV[1]*9 + indexDirV[1])/10; 
-    }
-    const float betweenDirNorm = std::sqrt(std::pow(betweenDirV[0], 2) + std::pow(betweenDirV[1], 2)); // 中点ベクトルのノルム
-    const std::vector<float> normalizedBetweenDirV = { // 正規化された中点ベクトル
-      float(betweenDirV[0]/betweenDirNorm),
-      float(betweenDirV[1]/betweenDirNorm)};
-    printf("%f, %f, %f\n", normalizedBetweenDirV[0], normalizedBetweenDirV[1], std::pow(normalizedBetweenDirV[0], 2) + std::pow(normalizedBetweenDirV[1], 2)); // デバッグ用に中点位置を出力
+    // const std::vector<float> thumbDirV = { // 人差し指全体のベクトル
+    //   landmarkList.landmark(4).x() - landmarkList.landmark(3).x(),
+    //   landmarkList.landmark(4).y() - landmarkList.landmark(3).y()};
+    // const std::vector<float> indexDirV = {
+    //   landmarkList.landmark(8).x() - landmarkList.landmark(7).x(),
+    //   landmarkList.landmark(8).y() - landmarkList.landmark(7).y()};
+    // std::vector<float> betweenDirV = {0, 0}; // 親指と人差し指の中点の向きのベクトル
+    // if(pass_through) { // パススルーなら中点そのまま
+    //   betweenDirV[0] = (thumbDirV[0] + indexDirV[0])/2; 
+    //   betweenDirV[1] = (thumbDirV[1] + indexDirV[1])/2; 
+    // } else { // ミラーなら重み付き平均
+    //   betweenDirV[0] = (thumbDirV[0]*9 + indexDirV[0])/10; 
+    //   betweenDirV[1] = (thumbDirV[1]*9 + indexDirV[1])/10; 
+    // }
+    // const float betweenDirNorm = std::sqrt(std::pow(betweenDirV[0], 2) + std::pow(betweenDirV[1], 2)); // 中点ベクトルのノルム
+    // const std::vector<float> normalizedBetweenDirV = { // 正規化された中点ベクトル
+    //   float(betweenDirV[0]/betweenDirNorm),
+    //   float(betweenDirV[1]/betweenDirNorm)};
+    // printf("%f, %f, %f\n", normalizedBetweenDirV[0], normalizedBetweenDirV[1], std::pow(normalizedBetweenDirV[0], 2) + std::pow(normalizedBetweenDirV[1], 2)); // デバッグ用に中点位置を出力
 
 
     mediapipe::NormalizedRect handRect = packet3.Get<mediapipe::NormalizedRect>();
@@ -264,8 +266,8 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
     float rectCenterX = handRect.x_center() * output_frame_mat.cols;
     float rectCenterY = handRect.y_center() * output_frame_mat.rows;
     // 正規化されたピンチの位置（これは普通に中点）
-    float pinchCenterNormX = (thumbTip.x()*1 + indexTip.x())/2;
-    float pinchCenterNormY = (thumbTip.y()*1 + indexTip.y())/2;
+    // float pinchCenterNormX = (thumbTip.x()*1 + indexTip.x())/2;
+    // float pinchCenterNormY = (thumbTip.y()*1 + indexTip.y())/2;
     
     /*
     pinchCenterNormとbetweenDirVの違い
@@ -273,55 +275,63 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
     betweenDirV: 拡大したものをどこに描画するか。重み付き平均。
     */
 
-    float pinchCenterX = (pinchCenterNormX) * output_frame_mat.cols;
-    float pinchCenterY = (pinchCenterNormY) * output_frame_mat.rows;
+    // float pinchCenterX = (pinchCenterNormX) * output_frame_mat.cols;
+    // float pinchCenterY = (pinchCenterNormY) * output_frame_mat.rows;
     // 握っていたらisPinching
-    bool isPinching = 
-      std::inner_product(indexBottomV.begin(), indexBottomV.end(), middleTipV.begin(), 0.0f) < 0 &&
-      std::inner_product(indexBottomV.begin(), indexBottomV.end(), ringTipV.begin(), 0.0f) < 0 &&
-      std::inner_product(indexBottomV.begin(), indexBottomV.end(), littleTipV.begin(), 0.0f) < 0;
+    // bool isPinching = 
+    //   std::inner_product(indexBottomV.begin(), indexBottomV.end(), middleTipV.begin(), 0.0f) < 0 &&
+    //   std::inner_product(indexBottomV.begin(), indexBottomV.end(), ringTipV.begin(), 0.0f) < 0 &&
+    //   std::inner_product(indexBottomV.begin(), indexBottomV.end(), littleTipV.begin(), 0.0f) < 0;
     
-    if(pinchCenterX != 0) {
+    // if(pinchCenterX != 0) {
+    if (thumbTip.x() != 0 && indexTip.x() != 0) {
+      isDetected = true;
       int radius = 3;
       cv::Point center;
       cv::Scalar color;
-      if (isPinching) {
-        center.x = pinchCenterX;
-        center.y = pinchCenterY;
-        // 親指と人差し指の距離。手の大きさで正規化することで手の大小にかかわらずピンチ状態を判定できる
-        float distanceBetween = (std::pow(thumbTip.x() - indexTip.x(), 2) + std::pow(thumbTip.y() - indexTip.y(), 2)) / handRect.width() / handRect.width();
+      // 親指と人差し指の距離。手の大きさで正規化することで手の大小にかかわらずピンチ状態を判定できる
+      float distanceBetween = (std::pow(thumbTip.x() - indexTip.x(), 2) + std::pow(thumbTip.y() - indexTip.y(), 2)) / handRect.width() / handRect.width();
+      // if (isPinching) {
+      //   center.x = pinchCenterX;
+      //   center.y = pinchCenterY;
 
-        // 中点、距離についてaveNum個の平均をとる
-        float distanceAverage = 0;
-        float betweenVAverageX = 0;
-        float betweenVAverageY = 0;
-        for (int i = 1; i<aveNum; i++) {
-          float temp = recentDistance[aveNum - i - 1];
-          recentDistance[aveNum - i] = temp;
-          distanceAverage += temp;
-          temp = recentBetweenVX[aveNum - i - 1];
-          recentBetweenVX[aveNum - i] = temp;
-          betweenVAverageX += temp;
-          temp = recentBetweenVY[aveNum - i - 1];
-          recentBetweenVY[aveNum - i] = temp;
-          betweenVAverageY += temp;
-        }
-        recentDistance[0] = distanceBetween;
-        distanceAverage += distanceBetween;
-        distanceAverage /= aveNum;
-        recentBetweenVX[0] = normalizedBetweenDirV[0];
-        betweenVAverageX += normalizedBetweenDirV[0];
-        betweenVAverageX /= aveNum;
-        recentBetweenVY[0] = normalizedBetweenDirV[1];
-        betweenVAverageY += normalizedBetweenDirV[1];
-        betweenVAverageY /= aveNum;
+      //   // 中点、距離についてaveNum個の平均をとる
+      //   float distanceAverage = 0;
+      //   float betweenVAverageX = 0;
+      //   float betweenVAverageY = 0;
+      //   for (int i = 1; i<aveNum; i++) {
+      //     float temp = recentDistance[aveNum - i - 1];
+      //     recentDistance[aveNum - i] = temp;
+      //     distanceAverage += temp;
+      //     temp = recentBetweenVX[aveNum - i - 1];
+      //     recentBetweenVX[aveNum - i] = temp;
+      //     betweenVAverageX += temp;
+      //     temp = recentBetweenVY[aveNum - i - 1];
+      //     recentBetweenVY[aveNum - i] = temp;
+      //     betweenVAverageY += temp;
+      //   }
+      //   recentDistance[0] = distanceBetween;
+      //   distanceAverage += distanceBetween;
+      //   distanceAverage /= aveNum;
+      //   recentBetweenVX[0] = normalizedBetweenDirV[0];
+      //   betweenVAverageX += normalizedBetweenDirV[0];
+      //   betweenVAverageX /= aveNum;
+      //   recentBetweenVY[0] = normalizedBetweenDirV[1];
+      //   betweenVAverageY += normalizedBetweenDirV[1];
+      //   betweenVAverageY /= aveNum;
 
-        if (distanceBetween <= 0.01) {
-          // trigger pinch image
+        if (distanceBetween >= /* threshold */ 0.5) {
+          isActive = false;
+          /* counter of position of point */ counter++;
+          colorOfPoint = green;
+        } else if ((distanceToPoint /* distance to the point */ <= 0.01) || (isActive = true)) {
           isActive = true;
-          // 検出失敗カウンタをリセット
-          failCount = 0;
+          colorOfPoint = blue;
+        } else {
+          colorOfPoint = green;
         }
+
+        // nothing touched from here
         if (failCount <= 2) {
           // draw pinch window
           int ROISize = std::min(int(distanceAverage * 1000), 400);
@@ -353,15 +363,16 @@ void overlayImage(cv::Mat* src, cv::Mat* overlay, const cv::Point& location) {
           cv::circle(input_frame_mat_copy, cv::Point(15, 22), 5, cv::Scalar(222, 137, 18), -1, cv::LINE_AA, 0); // 左上の青いインジケーター
           cv::putText(input_frame_mat_copy, "Pinching", cv::Point(30, 30), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(200,200,200), 1, cv::LINE_AA); // 
         }
-      } else { // ピンチしていないとき
-        isActive = false;
-        failCount += 1;
-        cv::circle(input_frame_mat_copy, cv::Point(15, 22), 5, cv::Scalar(78, 184, 17), -1, cv::LINE_AA, 0); // 左上の緑のインジケーター
-        cv::putText(input_frame_mat_copy, "Hand detected", cv::Point(30, 30), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(200,200,200), 1, cv::LINE_AA); // 左上のテキスト
-      }
+      // } else { // ピンチしていないとき
+      //   isActive = false;
+      //   // failCount += 1;
+      //   cv::circle(input_frame_mat_copy, cv::Point(15, 22), 5, cv::Scalar(78, 184, 17), -1, cv::LINE_AA, 0); // 左上の緑のインジケーター
+      //   cv::putText(input_frame_mat_copy, "Hand detected", cv::Point(30, 30), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(200,200,200), 1, cv::LINE_AA); // 左上のテキスト
+      // }
     } else { // 手がないとき
       isActive = false;
-      failCount += 1;
+      // failCount += 1;
+      colorOfPoint = red;
     }
     if (save_video) {
       if (!writer.isOpened()) {
