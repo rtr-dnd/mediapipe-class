@@ -10,8 +10,16 @@ All modifications are inside projects/pinchlens directory: no file outside it is
 
 Go to `mediapipe` folder and
 - build: bazel build -c opt --copt -DMESA_EGL_NO_X11_HEADERS --copt -DEGL_NO_X11 mediapipe/projects/pinchlens:pinchlens_gpu
-- run: GLOG_logtostderr=1 bazel-bin/mediapipe/projects/pinchlens/pinchlens_gpu  --calculator_graph_config_file=mediapipe/projects/pinchlens/graphs:hand_tracking_mobile.pbtxt
+- run: GLOG_logtostderr=1 bazel-bin/mediapipe/projects/pinchlens/pinchlens_gpu  --calculator_graph_config_file=mediapipe/projects/pinchlens/graphs/hand_tracking_mobile.pbtxt
 
+## Other programs
+### Orchestration
+- build: bazel build -c opt --copt -DMESA_EGL_NO_X11_HEADERS --copt -DEGL_NO_X11 mediapipe/projects/orchestration:orchestration_gpu
+- run: GLOG_logtostderr=1 bazel-bin/mediapipe/projects/orchestration/orchestration_gpu  --calculator_graph_config_file=mediapipe/projects/orchestration/graphs/multi_hand_tracking_mobile.pbtxt
+
+### 202009experiment
+- build: bazel build -c opt --copt -DMESA_EGL_NO_X11_HEADERS --copt -DEGL_NO_X11 mediapipe/projects/202009experiment:202009experiment
+- run: GLOG_logtostderr=1 bazel-bin/mediapipe/projects/202009experiment/202009experiment  --calculator_graph_config_file=mediapipe/projects/202009experiment/graphs/hand_tracking_mobile.pbtxt
 --------------------------------------------------------------------------------
 
 ![MediaPipe](docs/images/mediapipe_small.png)
