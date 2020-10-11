@@ -79,6 +79,15 @@ void overlayImage(cv::Mat *src, cv::Mat *overlay, const cv::Point &location)
   }
 }
 
+template <typename... Args>
+std::string format(const std::string &fmt, Args... args)
+{
+  size_t len = std::snprintf(nullptr, 0, fmt.c_str(), args...);
+  std::vector<char> buf(len + 1);
+  std::snprintf(&buf[0], len + 1, fmt.c_str(), args...);
+  return std::string(&buf[0], &buf[0] + len);
+}
+
 ::mediapipe::Status RunMPPGraph()
 {
   const bool pass_through = false; // パススルーモードのオンオフ
@@ -151,23 +160,66 @@ void overlayImage(cv::Mat *src, cv::Mat *overlay, const cv::Point &location)
   bool isDetected = false;
   // 今ピンチ中か否か
   bool isActive = false;
+  // whether pinching is finished and moving on to next point
+  bool isFinished = false;
   cv::Scalar colorOfPoint = cv::Scalar(255, 255, 255, 1);
   std::string dispMessage = "";
   float distanceBetween = 100.0;
+  int currentIndex = rand() % 35;
   int counter = 0;
+  // frame size: 640:480
   std::vector<cv::Point> centerPoints = {
-      cv::Point(100, 100),
-      cv::Point(100, 200),
+      cv::Point(170, 140),
+      cv::Point(220, 140),
+      cv::Point(270, 140),
+      cv::Point(320, 140),
+      cv::Point(370, 140),
+      cv::Point(420, 140),
+      cv::Point(470, 140),
+      cv::Point(170, 190),
+      cv::Point(220, 190),
+      cv::Point(270, 190),
+      cv::Point(320, 190),
+      cv::Point(370, 190),
+      cv::Point(420, 190),
+      cv::Point(470, 190),
+      cv::Point(170, 240),
+      cv::Point(220, 240),
+      cv::Point(270, 240),
+      cv::Point(320, 240),
+      cv::Point(370, 240),
+      cv::Point(420, 240),
+      cv::Point(470, 240),
+      cv::Point(170, 290),
+      cv::Point(220, 290),
+      cv::Point(270, 290),
+      cv::Point(320, 290),
+      cv::Point(370, 290),
+      cv::Point(420, 290),
+      cv::Point(470, 290),
+      cv::Point(170, 340),
+      cv::Point(220, 340),
+      cv::Point(270, 340),
+      cv::Point(320, 340),
+      cv::Point(370, 340),
+      cv::Point(420, 340),
+      cv::Point(470, 340),
   };
-  float pinchThresholdLower = 0.1;
-  float pinchThresholdUpper = 0.4;
-  float distanceThreshold = 50;
+  std::vector<bool> isCenterPointsFinished(35, false);
+  float pinchThresholdLower = 1;
+  float pinchThresholdUpper = 2.5;
+  float distanceThreshold = 25;
 
-  std::ofstream outputfile("/home/mech-user/dev/log.txt"); // File path
   auto startTime = std::chrono::system_clock::now();
   std::time_t startTimeConv = std::chrono::system_clock::to_time_t(startTime);
-  outputfile << std::ctime(&startTimeConv);
-  outputfile << "\n\n";
+  std::string timeNow = std::ctime(&startTimeConv);
+  std::ofstream outputfile("/home/mech-user/dev/" + timeNow + ".csv"); // File path
+  outputfile << timeNow;
+  outputfile << "\n";
+  outputfile << pass_through;
+  outputfile << "\n-\n";
+  outputfile << currentIndex;
+  outputfile << "\n";
 
   // 直近aveNum個の距離と中点の値を保存しておき、平均を取って描画する
   // const int aveNum = 5;
@@ -327,15 +379,24 @@ void overlayImage(cv::Mat *src, cv::Mat *overlay, const cv::Point &location)
       int radius = 3;
       cv::Point center;
       // 親指と人差し指の距離。手の大きさで正規化することで手の大小にかかわらずピンチ状態を判定できる
-      distanceBetween = (std::pow(thumbTip.x() - indexTip.x(), 2) + std::pow(thumbTip.y() - indexTip.y(), 2)) / handRect.width() / handRect.width();
+      float handWidth = std::sqrt(std::pow(landmarkList.landmark(5).x() - landmarkList.landmark(17).x(), 2) + std::pow(landmarkList.landmark(5).y() - landmarkList.landmark(17).y(), 2));
+      distanceBetween = std::sqrt(std::pow(thumbTip.x() - indexTip.x(), 2) + std::pow(thumbTip.y() - indexTip.y(), 2)) / handWidth;
+      // printf("this is \n");
+      // printf("%f\n", landmarkList.landmark(5).x());
+      // printf("%f\n", landmarkList.landmark(17).x());
+      // printf("%f\n", landmarkList.landmark(5).y());
+      // printf("%f\n", landmarkList.landmark(17).y());
+      // printf("%f\n", handWidth);
+      // printf("%f\n", distanceBetween);
+      // distanceBetween
       std::vector<float> thumbCoordinate = {
           thumbTip.x() * output_frame_mat.cols,
           thumbTip.y() * output_frame_mat.rows};
       std::vector<float> indexCoordinate = {
           indexTip.x() * output_frame_mat.cols,
           indexTip.y() * output_frame_mat.rows};
-      float distanceToPointThumb = std::sqrt(std::pow(thumbCoordinate[0] - centerPoints[counter].x, 2) + std::pow(thumbCoordinate[1] - centerPoints[counter].y, 2));
-      float distanceToPointIndex = std::sqrt(std::pow(indexCoordinate[0] - centerPoints[counter].x, 2) + std::pow(indexCoordinate[1] - centerPoints[counter].y, 2));
+      float distanceToPointThumb = std::sqrt(std::pow(thumbCoordinate[0] - centerPoints[currentIndex].x, 2) + std::pow(thumbCoordinate[1] - centerPoints[currentIndex].y, 2));
+      float distanceToPointIndex = std::sqrt(std::pow(indexCoordinate[0] - centerPoints[currentIndex].x, 2) + std::pow(indexCoordinate[1] - centerPoints[currentIndex].y, 2));
       // if (isPinching) {
       //   center.x = pinchCenterX;
       //   center.y = pinchCenterY;
@@ -367,13 +428,46 @@ void overlayImage(cv::Mat *src, cv::Mat *overlay, const cv::Point &location)
 
       if (isActive)
       {
-        if (distanceBetween >= pinchThresholdUpper)
+        // if (distanceBetween >= pinchThresholdUpper)
+        if (isFinished)
         {
+          printf("larger than, %d \n", currentIndex);
+          if (isCenterPointsFinished[currentIndex])
+          {
+            printf("first\n");
+          }
+          else
+          {
+            printf("second\n");
+          }
           isActive = false;
           counter++;
+          if (counter == 35)
+          {
+            break;
+          }
+          isCenterPointsFinished[currentIndex] = true;
+          isFinished = false;
+          bool temp = true;
+          while (temp)
+          {
+            printf("in while \n");
+            currentIndex = rand() % 35;
+            if (isCenterPointsFinished[currentIndex])
+            {
+              continue;
+            }
+            else
+            {
+              temp = false;
+              break;
+            }
+          }
           outputfile << "-\n";
+          outputfile << currentIndex;
+          outputfile << "\n";
           colorOfPoint = cv::Scalar(0, 255, 0, 1);
-          dispMessage = "Hand detected";
+          // dispMessage = "Hand detected";
         }
         else if ((distanceToPointThumb <= distanceThreshold) && (distanceToPointIndex <= distanceThreshold) && (distanceBetween <= pinchThresholdLower))
         {
@@ -396,11 +490,13 @@ void overlayImage(cv::Mat *src, cv::Mat *overlay, const cv::Point &location)
 
       if (isActive)
       {
-        outputfile << distanceToPointThumb;
-        outputfile << ", ";
-        outputfile << distanceToPointIndex;
-        outputfile << ", ";
-        outputfile << distanceBetween;
+        for (int i = 0; i <= 20; i++)
+        {
+          outputfile << landmarkList.landmark(0).x();
+          outputfile << ", ";
+          outputfile << landmarkList.landmark(0).y();
+          outputfile << ", ";
+        }
         outputfile << "\n";
       }
 
@@ -451,11 +547,11 @@ void overlayImage(cv::Mat *src, cv::Mat *overlay, const cv::Point &location)
       dispMessage = "Hand not detected";
     }
 
-    cv::circle(input_frame_mat_copy, centerPoints[counter], 5, colorOfPoint, -1, cv::LINE_AA, 0);
+    cv::circle(input_frame_mat_copy, centerPoints[currentIndex], 5, colorOfPoint, -1, cv::LINE_AA, 0);
     cv::putText(input_frame_mat_copy, dispMessage, cv::Point(30, 30), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(200, 200, 200), 1, cv::LINE_AA); //
     if (isDetected && isActive)
     {
-      cv::putText(input_frame_mat_copy, std::to_string(distanceBetween), centerPoints[counter], cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(200, 200, 200), 1, cv::LINE_AA); //
+      cv::putText(input_frame_mat_copy, std::to_string(distanceBetween), centerPoints[currentIndex], cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(200, 200, 200), 1, cv::LINE_AA); //
     }
 
     if (save_video)
@@ -475,8 +571,12 @@ void overlayImage(cv::Mat *src, cv::Mat *overlay, const cv::Point &location)
       cv::imshow(kWindowName, input_frame_mat_copy);
       // Press any key to exit.
       const int pressed_key = cv::waitKey(5);
-      if (pressed_key >= 0 && pressed_key != 255)
+      if (pressed_key == 27)
+      {
         grab_frames = false;
+      }
+      else if (pressed_key >= 0 && pressed_key != 255)
+        isFinished = true;
     }
   }
 
